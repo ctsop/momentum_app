@@ -64,6 +64,14 @@
             opacity: 0.5;
             background: #c0deed;
         }
+
+        /* Bolt Badge Styles */
+        .bolt-badge {
+            transition: all 0.3s ease;
+        }
+        .bolt-badge:hover {
+            transform: scale(1.05);
+        }
     </style>
 </head>
 <body class="transition-colors duration-300 bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200">
@@ -155,6 +163,16 @@
                 <button type="submit" class="bg-slate-700 dark:bg-sky-600 text-white font-semibold px-5 py-3 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-700 transition-colors w-full sm:w-auto">Add Task</button>
             </form>
         </main>
+    </div>
+
+    <!-- Built with Bolt.new Badge -->
+    <div class="fixed bottom-4 right-4 z-40">
+        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer" class="bolt-badge inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M13 0L0 13h7v11l13-13h-7V0z"/>
+            </svg>
+            <span>Built with Bolt.new</span>
+        </a>
     </div>
 
     <!-- Celebration Overlay -->
@@ -507,6 +525,7 @@
                 <div draggable="true" class="mini-task task-draggable bg-slate-50 dark:bg-slate-800 p-2 rounded-md text-sm flex items-center border border-slate-200 dark:border-slate-700 group" data-task-id="${task.id}" data-goal-id="${task.goalId}" data-text="${task.text}">
                     <input type="checkbox" ${task.done ? 'checked' : ''} class="mini-task-checkbox h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 mr-3 shrink-0">
                     <span class="task-text-span flex-grow cursor-pointer ${task.done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}">${task.text}</span>
+                    
                     <div class="flex items-center">
                         <button class="delete-mini-task-btn text-slate-300 dark:text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete this task">
                             <i class="fa-solid fa-xmark"></i>
