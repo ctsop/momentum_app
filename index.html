@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Momentum - Goals, Tasks & Timers</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Explicitly configure Tailwind to use class-based dark mode
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script>
+        // Set initial theme to avoid flash of wrong theme
+        const savedTheme = localStorage.getItem('momentum_theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        
+        /* Light Theme Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar-track { background-color: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+
+        /* Dark Theme Scrollbar */
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background-color: #1e293b; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+
+        .drop-zone-active {
+            outline: 2px dashed #38bdf8;
+            background-color: #f0f9ff;
+        }
+        .dark .drop-zone-active {
+            background-color: rgba(14, 165, 233, 0.1);
+        }
+
+        .confetti {
+            width: 10px; height: 10px; background-color: #ef4444;
+            position: absolute; opacity: 0; animation: confetti-fall 3s ease-out forwards;
+        }
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+          -webkit-appearance: none; 
+          margin: 0; 
+        }
+        input[type=number] { -moz-appearance: textfield; }
+        .ghost {
+            opacity: 0.5;
+            background: #c0deed;
+        }
+    </style>
+</head>
+<body class="transition-colors duration-300 bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200">
+
+    <div id="app-container" class="flex flex-col md:flex-row w-full h-screen overflow-hidden">
+
+        <!-- Left Column: Goals/Projects -->
+        <aside id="goals-aside" class="w-full md:w-1/3 xl:w-1/4 bg-slate-100 dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 p-4 md:p-6 flex flex-col transition-colors duration-300">
+            <header class="mb-6">
+                <h1 class="text-2xl font-bold text-slate-700 dark:text-slate-200 flex items-center"><i class="fa-solid fa-rocket mr-3 text-sky-500"></i>My Goals</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Your long-term projects and ambitions.</p>
+            </header>
+            
+            <form id="add-goal-form" class="flex items-center gap-2 mb-4">
+                <input type="text" id="new-goal-input" placeholder="Add a new big goal..." class="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 transition">
+                <button type="submit" class="bg-sky-500 text-white font-semibold px-4 py-2 rounded-lg hover:bg-sky-600 transition-colors shrink-0">Add</button>
+            </form>
+
+            <div id="goals-list" class="flex-grow overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                <!-- Goal cards will be injected here -->
+            </div>
+            
+            <div id="archived-goals-section" class="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+                <button id="toggle-archive-btn" class="text-sm font-semibold text-slate-500 dark:text-slate-400 w-full text-left flex justify-between items-center">
+                    <span>Archived Goals</span>
+                    <i class="fa-solid fa-chevron-down transition-transform"></i>
+                </button>
+                <div id="archived-goals-list" class="hidden mt-2 space-y-2">
+                    <!-- Archived goals will be injected here -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Column: Today's Tasks -->
+        <main id="today-view" class="w-full md:w-2/3 xl:w-3/4 p-4 md:p-8 flex flex-col bg-white dark:bg-slate-950 transition-colors duration-300">
+            <header class="mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div>
+                        <h2 id="greeting" class="text-3xl font-bold text-slate-800 dark:text-slate-100">Good Morning!</h2>
+                        <p id="current-date" class="text-slate-500 dark:text-slate-400">Let's make today productive.</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button id="stats-btn" class="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Weekly Stats">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </button>
+                        <button id="sound-toggle" class="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle Sounds">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                        <button id="theme-toggle" class="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" title="Toggle Theme">
+                            <i class="fa-solid fa-moon"></i>
+                        </button>
+                        <div class="text-center bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                             <div class="text-xs font-medium text-slate-500 dark:text-slate-400">Time In Day</div>
+                             <div id="daily-time-remaining" class="text-xl font-mono font-bold">23:59:59</div>
+                        </div>
+                        <div id="streak-counter" class="text-center bg-amber-100 text-amber-700 px-4 py-2 rounded-lg">
+                            <div class="text-xs font-medium">STREAK</div>
+                            <div class="text-2xl font-bold">🔥 0</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-grow overflow-y-auto custom-scrollbar pr-2 -mr-4">
+                <section id="rollover-tasks-section" class="mb-6 hidden">
+                    <h3 class="font-bold text-lg text-slate-600 dark:text-slate-300 mb-2"><i class="fa-solid fa-arrow-rotate-left mr-2"></i>From Yesterday</h3>
+                    <div id="rollover-tasks-list" class="space-y-3"></div>
+                </section>
+                
+                <section id="todo-section" class="mb-6">
+                    <h3 class="font-bold text-lg text-slate-600 dark:text-slate-300 mb-2"><i class="fa-solid fa-list-check mr-2"></i>Today's Focus</h3>
+                    <div id="todo-list" class="space-y-3"></div>
+                </section>
+
+                <section id="completed-section" class="mt-8">
+                     <h3 class="font-bold text-lg text-slate-400 dark:text-slate-500 mb-2 transition-all"><i class="fa-solid fa-check-double mr-2"></i>Completed Today</h3>
+                     <div id="completed-list" class="space-y-3"></div>
+                </section>
+            </div>
+
+            <!-- Quick Add Form -->
+            <form id="add-task-form" class="mt-6 flex flex-col sm:flex-row items-center gap-2">
+                <input type="text" id="new-task-input" placeholder="Add a quick task for today..." class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 transition">
+                <div class="flex items-center gap-2 shrink-0">
+                    <input type="number" id="new-task-hours" placeholder="H" min="0" class="w-16 px-2 py-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-center">
+                    <span class="font-bold">:</span>
+                    <input type="number" id="new-task-minutes" placeholder="M" min="0" max="59" class="w-16 px-2 py-3 bg-slate-100 dark:bg-slate-800 rounded-lg text-center">
+                </div>
+                <button type="submit" class="bg-slate-700 dark:bg-sky-600 text-white font-semibold px-5 py-3 rounded-lg hover:bg-slate-800 dark:hover:bg-sky-700 transition-colors w-full sm:w-auto">Add Task</button>
+            </form>
+        </main>
+    </div>
+
+    <!-- Celebration Overlay -->
+    <div id="celebration-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pointer-events-none">
+        <div class="text-center text-white">
+            <h1 class="text-6xl font-bold mb-4">🎉 All Done! 🎉</h1>
+            <p class="text-2xl">Amazing work today. See you tomorrow!</p>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="modal-overlay" class="hidden fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4">
+        <!-- Delete Confirmation Modal -->
+        <div id="delete-modal" class="hidden bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-sm text-center">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Are you sure?</h3>
+            <p id="delete-modal-text" class="text-sm text-slate-600 dark:text-slate-400 mb-6">This action cannot be undone.</p>
+            <div class="flex justify-center gap-4">
+                <button id="cancel-delete-btn" class="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg font-semibold">Cancel</button>
+                <button id="confirm-delete-btn" class="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold">Delete</button>
+            </div>
+        </div>
+        <!-- Stats Modal -->
+        <div id="stats-modal" class="hidden bg-white dark:bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-lg text-center">
+             <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100">Last 7 Days Stats</h3>
+                <button id="close-stats-btn" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-times"></i></button>
+             </div>
+             <div id="stats-content" class="grid grid-cols-2 gap-4 text-left"></div>
+        </div>
+    </div>
+    
+    <script type="module">
+        // --- Application State and Configuration ---
+        const LOCAL_STORAGE_KEY = 'momentum_app_data_v12';
+        let state = {
+            goals: [],
+            tasks: [],
+            profile: {
+                streak: 0,
+                lastLogin: new Date().toISOString().split('T')[0]
+            },
+            settings: {
+                theme: 'light',
+                sounds: true,
+                archiveOpen: false
+            }
+        };
+        let timerInterval;
+        let deleteCallback = null;
+
+        // --- DOM Element References ---
+        const goalsList = document.getElementById('goals-list');
+        const todoList = document.getElementById('todo-list');
+        const completedList = document.getElementById('completed-list');
+        const rolloverList = document.getElementById('rollover-tasks-list');
+        const greetingEl = document.getElementById('greeting');
+        const dateEl = document.getElementById('current-date');
+        const streakCounterEl = document.getElementById('streak-counter');
+        const addGoalForm = document.getElementById('add-goal-form');
+        const newGoalInput = document.getElementById('new-goal-input');
+        const addTaskForm = document.getElementById('add-task-form');
+        const newTaskInput = document.getElementById('new-task-input');
+        const newTaskHours = document.getElementById('new-task-hours');
+        const newTaskMinutes = document.getElementById('new-task-minutes');
+        const todayView = document.getElementById('today-view');
+        const dailyTimeRemainingEl = document.getElementById('daily-time-remaining');
+        const themeToggleButton = document.getElementById('theme-toggle');
+        const soundToggleButton = document.getElementById('sound-toggle');
+        const statsButton = document.getElementById('stats-btn');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteModalText = document.getElementById('delete-modal-text');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const statsModal = document.getElementById('stats-modal');
+        const closeStatsBtn = document.getElementById('close-stats-btn');
+        const statsContent = document.getElementById('stats-content');
+        const toggleArchiveBtn = document.getElementById('toggle-archive-btn');
+        const archivedGoalsList = document.getElementById('archived-goals-list');
+        const celebrationOverlay = document.getElementById('celebration-overlay');
+
+        // --- Sound Effects Engine ---
+        let sounds = {};
+        function setupSounds() {
+            sounds.click = new Tone.MembraneSynth({
+                octaves: 4,
+                pitchDecay: 0.1,
+                envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.2 }
+            }).toDestination();
+            sounds.swoosh = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.005, decay: 0.1, sustain: 0 }
+            }).toDestination();
+            sounds.timerDone = new Tone.Synth({
+                oscillator: { type: 'triangle' },
+                envelope: { attack: 0.005, decay: 0.2, sustain: 0.1, release: 1 }
+            }).toDestination();
+        }
+
+        function playSound(soundName, note = 'C4', duration = '8n') {
+            if (state.settings.sounds && sounds[soundName]) {
+                 if (Tone.context.state !== 'running') {
+                    Tone.start();
+                }
+                if (soundName === 'swoosh') {
+                    sounds.swoosh.triggerAttackRelease(duration);
+                } else {
+                    sounds[soundName].triggerAttackRelease(note, duration);
+                }
+            }
+        }
+        
+        function toggleSound() {
+            state.settings.sounds = !state.settings.sounds;
+            soundToggleButton.innerHTML = `<i class="fa-solid ${state.settings.sounds ? 'fa-volume-high' : 'fa-volume-xmark'}"></i>`;
+            saveState();
+        }
+
+        // --- Data Persistence & Theme ---
+        // ... (rest of the code is unchanged until the next marked section) ...
+
+        function loadState() {
+            const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedState) {
+                state = JSON.parse(savedState);
+                if (!state.goals) state.goals = [];
+                if (!state.tasks) state.tasks = [];
+                if (!state.profile) state.profile = { streak: 0, lastLogin: new Date().toISOString().split('T')[0] };
+                if (!state.settings) state.settings = { theme: 'light', sounds: true, archiveOpen: false };
+                if (state.settings.sounds === undefined) state.settings.sounds = true;
+                if (state.settings.archiveOpen === undefined) state.settings.archiveOpen = false;
+                state.tasks.forEach(task => {
+                    if (task.setTime === undefined) task.setTime = 0;
+                    if (task.timeRemaining === undefined) task.timeRemaining = 0;
+                    if (task.isRunning === undefined) task.isRunning = false;
+                    if (task.done) task.isRunning = false;
+                    if (task.status === undefined) task.status = task.date ? 'inDaily' : 'inGoal';
+                });
+                state.goals.forEach(goal => {
+                    if (goal.isArchived === undefined) goal.isArchived = false;
+                });
+            }
+            applyTheme();
+            soundToggleButton.innerHTML = `<i class="fa-solid ${state.settings.sounds ? 'fa-volume-high' : 'fa-volume-xmark'}"></i>`;
+        }
+
+        // --- (Unchanged code from here until renderGoals) ---
+        function saveState() {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function applyTheme() {
+            if (state.settings.theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                themeToggleButton.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            } else {
+                document.documentElement.classList.remove('dark');
+                themeToggleButton.innerHTML = '<i class="fa-solid fa-moon"></i>';
+            }
+        }
+
+        function toggleTheme() {
+            state.settings.theme = state.settings.theme === 'light' ? 'dark' : 'light';
+            applyTheme();
+            saveState();
+        }
+
+
+        // --- Main Application Logic ---
+        
+        function main() {
+            loadState();
+            setupUser();
+            renderAll();
+            updateTimeAndGreeting();
+            attachEventListeners();
+            startMasterTimers();
+            setupSounds();
+        }
+
+        function setupUser() {
+            const today = new Date().toISOString().split('T')[0];
+            const lastLogin = state.profile.lastLogin;
+
+            if (!lastLogin || lastLogin !== today) {
+                const lastLoginDate = new Date(lastLogin);
+                const todayDate = new Date(today);
+                const diffTime = todayDate - lastLoginDate;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                
+                if (diffDays > 1) {
+                    state.profile.streak = 0;
+                }
+                
+                if (diffDays >= 1) {
+                    handleTaskRollover(lastLogin);
+                }
+                
+                state.profile.lastLogin = today;
+                saveState();
+            }
+        }
+
+        function startMasterTimers() {
+            setInterval(() => {
+                const now = new Date();
+                const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+                const dailyTimeRemaining = Math.floor((endOfDay - now) / 1000);
+                dailyTimeRemainingEl.textContent = formatTime(dailyTimeRemaining);
+            }, 1000);
+
+            timerInterval = setInterval(() => {
+                let changed = false;
+                state.tasks.forEach(task => {
+                    if (task.isRunning && task.timeRemaining > 0 && task.status === 'inDaily') {
+                        task.timeRemaining--;
+                        if (task.timeRemaining === 0) {
+                            playSound('timerDone', 'C5');
+                        }
+                        changed = true;
+                    } else if (task.isRunning && task.timeRemaining <= 0) {
+                        task.isRunning = false;
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    saveState();
+                    renderDailyTasks();
+                }
+            }, 1000);
+        }
+
+        // --- Render Functions ---
+
+        function renderAll() {
+            renderGoals();
+            renderDailyTasks();
+            updateStreakCounter();
+        }
+
+        function renderGoals() {
+            const activeGoals = state.goals.filter(g => !g.isArchived);
+            const archivedGoals = state.goals.filter(g => g.isArchived);
+
+            const goalOrder = activeGoals.map(g => g.id);
+            activeGoals.sort((a,b) => goalOrder.indexOf(a.id) - goalOrder.indexOf(b.id));
+
+            goalsList.innerHTML = '';
+            activeGoals.forEach(goal => {
+                const goalEl = createGoalElement(goal);
+                goalsList.appendChild(goalEl);
+            });
+
+            archivedGoalsList.innerHTML = '';
+            archivedGoals.forEach(goal => {
+                const goalEl = createGoalElement(goal);
+                archivedGoalsList.appendChild(goalEl);
+            });
+            
+            toggleArchiveSection(state.settings.archiveOpen);
+
+            updateAllGoalProgress();
+        }
+        
+        function createGoalElement(goal) {
+            const el = document.createElement('div');
+            el.className = 'goal-card bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm mb-4 border border-slate-200 dark:border-slate-700';
+            el.dataset.goalId = goal.id;
+            el.draggable = !goal.isArchived;
+            
+            const miniTasks = state.tasks
+                .filter(t => t.goalId === goal.id && t.status === 'inGoal')
+                .sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+            
+            const totalTasksForGoal = state.tasks.filter(t => t.goalId === goal.id).length;
+            const completedTasksForGoal = state.tasks.filter(t => t.goalId === goal.id && t.done).length;
+            const isGoalComplete = totalTasksForGoal > 0 && totalTasksForGoal === completedTasksForGoal;
+
+            el.innerHTML = `
+                <div class="flex justify-between items-start mb-3 gap-2">
+                    <h4 class="goal-title font-bold text-slate-800 dark:text-slate-100 flex-grow cursor-pointer" title="Click to edit">${goal.title}</h4>
+                    <div class="flex items-center shrink-0">
+                        ${isGoalComplete && !goal.isArchived ? '<button class="archive-goal-btn text-xs font-semibold text-green-600 bg-green-100 hover:bg-green-200 py-1 px-2 rounded-md mr-2">Archive</button>' : ''}
+                        ${goal.isArchived ? '<button class="unarchive-goal-btn text-xs font-semibold text-sky-600 bg-sky-100 hover:bg-sky-200 py-1 px-2 rounded-md mr-2">Unarchive</button>' : ''}
+                        <button class="delete-goal-btn text-slate-400 hover:text-red-500 transition-colors w-6 h-6 flex items-center justify-center"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-3">
+                    <div class="bg-sky-500 h-2.5 rounded-full progress-bar" style="width: 0%"></div>
+                </div>
+                ${!goal.isArchived ? `
+                <div class="mini-tasks-list space-y-2 mb-3">
+                    ${miniTasks.map(mt => createMiniTaskElement(mt)).join('')}
+                </div>
+                <form class="add-mini-task-form flex items-center gap-2">
+                    <input type="text" placeholder="Add a small step..." class="add-mini-task-text w-full text-sm px-2 py-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <button type="submit" class="text-sky-500 font-semibold text-sm hover:text-sky-600 shrink-0">Add</button>
+                </form>
+                ` : ''}
+            `;
+            
+            // Add event listeners
+            el.addEventListener('dragstart', handleDragStart);
+            el.addEventListener('dragover', handleDragOver);
+            el.addEventListener('dragenter', (e) => handleDragEnter(e, el));
+            el.addEventListener('dragleave', (e) => handleDragLeave(e, el));
+            el.addEventListener('drop', handleDropOnGoal);
+            el.querySelector('.delete-goal-btn').onclick = () => showDeleteConfirmation(goal.id);
+            el.querySelector('.goal-title').onclick = (e) => editText(e.target, (newText) => updateGoalName(goal.id, newText));
+            
+            if (!goal.isArchived) {
+                el.querySelector('.add-mini-task-form').onsubmit = e => {
+                    e.preventDefault();
+                    const input = e.target.querySelector('.add-mini-task-text');
+                    addMiniTask(goal.id, input.value);
+                    input.value = '';
+                };
+                el.querySelectorAll('.mini-task').forEach(miniTaskEl => {
+                    miniTaskEl.addEventListener('dragstart', handleDragStart);
+                });
+                el.querySelectorAll('.delete-mini-task-btn').forEach(btn => {
+                    btn.onclick = (e) => {
+                        const taskId = e.currentTarget.closest('.mini-task').dataset.taskId;
+                        deleteTask(taskId);
+                        renderAll();
+                    };
+                });
+                el.querySelectorAll('.mini-task-checkbox').forEach(checkbox => {
+                    checkbox.onchange = (e) => {
+                        const taskId = e.currentTarget.closest('.mini-task').dataset.taskId;
+                        toggleTaskStatus(taskId, e.target.checked);
+                    };
+                });
+                el.querySelectorAll('.task-text-span').forEach(span => {
+                    span.onclick = (e) => {
+                        const taskId = e.currentTarget.closest('.mini-task').dataset.taskId;
+                        editText(e.target, (newText) => updateTaskName(taskId, newText));
+                    };
+                });
+            }
+
+            if(isGoalComplete && !goal.isArchived) {
+                el.querySelector('.archive-goal-btn').onclick = () => archiveGoal(goal.id, true);
+            }
+            if(goal.isArchived) {
+                el.querySelector('.unarchive-goal-btn').onclick = () => archiveGoal(goal.id, false);
+            }
+
+            return el;
+        }
+        
+        function createMiniTaskElement(task) {
+            return `
+                <div draggable="true" class="mini-task task-draggable bg-slate-50 dark:bg-slate-800 p-2 rounded-md text-sm flex items-center border border-slate-200 dark:border-slate-700 group" data-task-id="${task.id}" data-goal-id="${task.goalId}" data-text="${task.text}">
+                    <input type="checkbox" ${task.done ? 'checked' : ''} class="mini-task-checkbox h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 mr-3 shrink-0">
+                    <span class="task-text-span flex-grow cursor-pointer ${task.done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}">${task.text}</span>
+                    <div class="flex items-center">
+                        <button class="delete-mini-task-btn text-slate-300 dark:text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete this task">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                        <i class="fas fa-grip-lines text-slate-300 dark:text-slate-500 ml-2"></i>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function renderDailyTasks() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const tasksInDaily = state.tasks.filter(t => t.status === 'inDaily');
+
+            const todosToday = tasksInDaily.filter(t => t.date === todayStr && !t.done);
+            const completedToday = tasksInDaily.filter(t => t.date === todayStr && t.done);
+            const rolloverTasks = tasksInDaily.filter(t => t.isRollover && !t.done);
+            
+            todosToday.sort((a,b) => (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0));
+
+            document.getElementById('rollover-tasks-section').classList.toggle('hidden', rolloverTasks.length === 0);
+            
+            renderTaskList(rolloverList, rolloverTasks);
+            renderTaskList(todoList, todosToday);
+            renderTaskList(completedList, completedToday);
+            
+            checkAllTasksCompleted();
+        }
+
+        function renderTaskList(listElement, tasks) {
+            listElement.innerHTML = '';
+            tasks.forEach(task => listElement.appendChild(createDailyTaskElement(task)));
+        }
+
+        function createDailyTaskElement(task) {
+            const el = document.createElement('div');
+            
+            let classList = `daily-task task-draggable p-4 rounded-lg transition-all duration-300 `;
+            if (task.done) {
+                classList += 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500';
+            } else {
+                classList += 'bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-700';
+                if (task.isStarred) {
+                    classList += ' border-l-4 border-l-amber-400';
+                }
+            }
+            el.className = classList;
+
+            el.dataset.taskId = task.id;
+            el.dataset.goalId = task.goalId || '';
+            el.draggable = true;
+
+            const progressPercentage = task.setTime > 0 ? ((task.setTime - task.timeRemaining) / task.setTime) * 100 : 0;
+            const isTimeUp = task.setTime > 0 && task.timeRemaining <= 0;
+            const starColorClass = task.isStarred && !task.done ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600';
+
+
+            el.innerHTML = `
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <input type="checkbox" ${task.done ? 'checked' : ''} class="task-checkbox h-5 w-5 rounded border-gray-300 text-sky-600 focus:ring-sky-500 mt-1 shrink-0">
+                    <div class="flex-grow">
+                        <span class="task-text-span font-medium cursor-pointer ${task.done ? 'line-through' : ''}">${task.text}</span>
+                        <div class="flex items-center gap-4 mt-2">
+                            <div class="time-display-container cursor-pointer" title="Click to edit time">
+                                <div class="text-2xl font-mono font-bold ${isTimeUp ? 'text-red-500' : 'text-slate-700 dark:text-slate-200'}">
+                                    ${formatTime(task.timeRemaining)}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-1">
+                                <button class="toggle-timer-btn p-2 rounded-full transition-colors duration-200 ${task.isRunning ? 'bg-amber-500/20 text-amber-600' : 'bg-green-500/20 text-green-700'}" aria-label="${task.isRunning ? 'Pause' : 'Start'}">
+                                    <i class="fas ${task.isRunning ? 'fa-pause' : 'fa-play'} fa-fw"></i>
+                                </button>
+                                <button class="reset-timer-btn p-2 rounded-full transition-colors duration-200 bg-slate-500/10 text-slate-600 dark:bg-slate-700/50 dark:text-slate-300" aria-label="Reset">
+                                    <i class="fas fa-undo fa-fw"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 self-start sm:self-center ml-auto pl-4">
+                         <button class="toggle-star-btn ${starColorClass} hover:text-amber-400 transition-colors px-2"><i class="fas fa-star"></i></button>
+                         <button class="delete-task-btn text-slate-400 dark:text-slate-500 hover:text-red-500 transition-colors px-2"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </div>
+                ${task.setTime > 0 && !task.done ? `
+                <div class="mt-3 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 w-full">
+                    <div class="bg-sky-500 h-1.5 rounded-full transition-all duration-500" style="width: ${progressPercentage}%"></div>
+                </div>` : ''}
+            `;
+
+            el.addEventListener('dragstart', handleDragStart);
+            el.querySelector('.task-checkbox').onchange = (e) => toggleTaskStatus(task.id, e.target.checked);
+            el.querySelector('.delete-task-btn').onclick = () => deleteTask(task.id);
+            el.querySelector('.task-text-span').onclick = (e) => editText(e.target, (newText) => updateTaskName(task.id, newText));
+            el.querySelector('.toggle-star-btn').onclick = () => toggleTaskStar(task.id, !task.isStarred);
+            el.querySelector('.toggle-timer-btn').onclick = () => toggleTimer(task.id);
+            el.querySelector('.reset-timer-btn').onclick = () => resetTimer(task.id);
+            el.querySelector('.time-display-container').onclick = (e) => showTimeEditor(task.id, e.currentTarget);
+            
+            return el;
+        }
+
+        // --- Data Manipulation Functions ---
+        
+        function addGoal(title) {
+            if (!title.trim()) return;
+            const newGoal = { id: crypto.randomUUID(), title: title.trim(), createdAt: new Date().toISOString(), isArchived: false };
+            state.goals.push(newGoal);
+            saveState();
+            renderAll();
+        }
+        
+        function deleteGoal(goalId) {
+            state.goals = state.goals.filter(g => g.id !== goalId);
+            state.tasks = state.tasks.filter(t => t.goalId !== goalId);
+            saveState();
+            renderAll();
+        }
+
+        function updateGoalName(goalId, newName) {
+            const goal = state.goals.find(g => g.id === goalId);
+            if (goal && newName) {
+                goal.title = newName;
+                saveState();
+                renderAll();
+            }
+        }
+        
+        function archiveGoal(goalId, isArchived) {
+            const goal = state.goals.find(g => g.id === goalId);
+            if (goal) {
+                goal.isArchived = isArchived;
+                saveState();
+                renderAll();
+            }
+        }
+
+        function addMiniTask(goalId, text) {
+            if (!text.trim()) return;
+            const newTask = {
+                id: crypto.randomUUID(), text: text.trim(), done: false, isStarred: false, isRunning: false,
+                setTime: 0, timeRemaining: 0, goalId: goalId, status: 'inGoal',
+                date: null, isRollover: false, createdAt: new Date().toISOString()
+            };
+            state.tasks.push(newTask);
+            saveState();
+            renderAll();
+        }
+        
+        function addQuickTask(text, setTime) {
+            if (!text.trim()) return;
+            state.tasks.push({
+                id: crypto.randomUUID(), text: text.trim(), done: false, isStarred: false, isRunning: false,
+                setTime: setTime, timeRemaining: setTime, goalId: null, status: 'inDaily',
+                date: new Date().toISOString().split('T')[0], isRollover: false, createdAt: new Date().toISOString()
+            });
+            saveState();
+            renderAll();
+        }
+
+        function deleteTask(taskId) {
+            state.tasks = state.tasks.filter(t => t.id !== taskId);
+            saveState();
+            renderAll();
+        }
+
+        function updateTaskName(taskId, newName) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task && newName) {
+                task.text = newName;
+                saveState();
+                renderAll();
+            }
+        }
+
+
+        function toggleTaskStatus(taskId, isDone) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.done = isDone;
+                if(isDone) {
+                    playSound('click');
+                    task.isRunning = false;
+                    if(task.status === 'inDaily') updateStreakOnCompletion();
+                }
+                saveState();
+                renderAll();
+            }
+        }
+        
+        function toggleTaskStar(taskId, isStarred) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.isStarred = isStarred;
+                saveState();
+                renderAll();
+            }
+        }
+        
+        // --- Timer Functions ---
+        function toggleTimer(taskId) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task && !task.done && task.timeRemaining > 0) {
+                task.isRunning = !task.isRunning;
+                saveState();
+                renderDailyTasks();
+            }
+        }
+
+        function resetTimer(taskId) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.timeRemaining = task.setTime;
+                task.isRunning = false;
+                saveState();
+                renderDailyTasks();
+            }
+        }
+
+        function showTimeEditor(taskId, containerElement) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const currentHours = Math.floor(task.setTime / 3600);
+            const currentMinutes = Math.floor((task.setTime % 3600) / 60);
+
+            containerElement.innerHTML = `
+                <div class="flex items-center gap-1">
+                    <input type="number" value="${currentHours}" class="edit-hours w-16 px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-center text-lg">
+                    <span class="font-bold text-lg">:</span>
+                    <input type="number" value="${currentMinutes}" class="edit-minutes w-16 px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded-md text-center text-lg">
+                    <button class="save-time-btn bg-green-500 text-white rounded-md px-3 py-1 ml-2 text-sm">Save</button>
+                </div>
+            `;
+            containerElement.querySelector('.save-time-btn').onclick = () => {
+                const newHours = parseInt(containerElement.querySelector('.edit-hours').value, 10) || 0;
+                const newMinutes = parseInt(containerElement.querySelector('.edit-minutes').value, 10) || 0;
+                const newTotalSeconds = (newHours * 3600) + (newMinutes * 60);
+                
+                task.setTime = newTotalSeconds;
+                task.timeRemaining = newTotalSeconds; // Reset timer to new value
+                task.isRunning = false;
+                
+                saveState();
+                renderAll();
+            };
+        }
+
+        // --- Feature Logic ---
+
+        function formatTime(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        
+        function formatTimeShort(totalSeconds) {
+            if (totalSeconds < 60) return "0m";
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.round((totalSeconds % 3600) / 60);
+            let result = "";
+            if (hours > 0) result += `${hours}h `;
+            if (minutes > 0) result += `${minutes}m`;
+            return result.trim();
+        }
+
+        function updateTimeAndGreeting() {
+            const now = new Date();
+            const hour = now.getHours();
+            greetingEl.textContent = hour < 12 ? 'Good Morning!' : hour < 18 ? 'Good Afternoon!' : 'Good Evening!';
+            dateEl.textContent = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+        
+        function updateStreakCounter() {
+            streakCounterEl.querySelector('.font-bold').textContent = `🔥 ${state.profile.streak || 0}`;
+        }
+
+        function updateStreakOnCompletion() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (state.profile.lastLogin !== todayStr) {
+                const lastLoginDate = new Date(state.profile.lastLogin);
+                const diffDays = Math.ceil((new Date(todayStr) - lastLoginDate) / (1000 * 60 * 60 * 24));
+                state.profile.streak = diffDays === 1 ? (state.profile.streak || 0) + 1 : 1;
+                state.profile.lastLogin = todayStr;
+            } else if (!state.profile.streak) {
+                state.profile.streak = 1;
+            }
+            saveState();
+            updateStreakCounter();
+        }
+        
+        function handleTaskRollover(lastLogin) {
+            if (!lastLogin) return;
+            const todayStr = new Date().toISOString().split('T')[0];
+            state.tasks.forEach(task => {
+                if (task.status === 'inDaily' && task.date === lastLogin && !task.done) {
+                    task.date = todayStr;
+                    task.isRollover = true;
+                    task.isStarred = false;
+                    task.isRunning = false;
+                    task.timeRemaining = task.setTime;
+                }
+            });
+            state.tasks = state.tasks.filter(task => {
+                const daysOld = (new Date() - new Date(task.createdAt)) / (1000 * 60 * 60 * 24);
+                return daysOld < 30;
+            });
+            saveState();
+        }
+
+        function updateGoalProgress(goalId) {
+            const tasksForGoal = state.tasks.filter(t => t.goalId === goalId);
+            const totalTasks = tasksForGoal.length;
+            if (totalTasks === 0) {
+                 const progressBar = document.querySelector(`[data-goal-id="${goalId}"] .progress-bar`);
+                 if(progressBar) progressBar.style.width = '100%';
+                 return;
+            }
+            const completedTasks = tasksForGoal.filter(t => t.done).length;
+            const progress = (completedTasks / totalTasks) * 100;
+            const progressBar = document.querySelector(`[data-goal-id="${goalId}"] .progress-bar`);
+            if (progressBar) progressBar.style.width = `${progress}%`;
+        }
+        
+        function updateAllGoalProgress() {
+            state.goals.forEach(goal => updateGoalProgress(goal.id));
+        }
+
+        function checkAllTasksCompleted() {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const incompleteTasks = state.tasks.filter(t => t.status === 'inDaily' && t.date === todayStr && !t.done);
+            const totalDailyTasks = state.tasks.filter(t => t.status === 'inDaily' && t.date === todayStr).length;
+
+            if (totalDailyTasks > 0 && incompleteTasks.length === 0) {
+                playSound('timerDone', 'C5', '4n');
+                triggerConfetti();
+            }
+        }
+        
+        function triggerConfetti() {
+            if (!celebrationOverlay) return;
+            celebrationOverlay.classList.remove('hidden');
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + 'vw';
+                confetti.style.animationDelay = Math.random() * 2 + 's';
+                confetti.style.backgroundColor = `hsl(${Math.random() * 360}, 90%, 60%)`;
+                celebrationOverlay.appendChild(confetti);
+                setTimeout(() => confetti.remove(), 3000);
+            }
+            setTimeout(() => celebrationOverlay.classList.add('hidden'), 4000);
+        }
+
+        function showDeleteConfirmation(goalId) {
+            modalOverlay.classList.remove('hidden');
+            deleteModal.classList.remove('hidden');
+            deleteModalText.textContent = "This will delete the goal and all its tasks permanently.";
+            deleteCallback = () => {
+                deleteGoal(goalId);
+                closeModal();
+            };
+        }
+
+        function editText(element, onSave) {
+            element.style.display = 'none';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = element.textContent;
+            input.className = element.className.replace('cursor-pointer', '') + ' bg-slate-200 dark:bg-slate-700 rounded p-1 w-full';
+            element.parentNode.insertBefore(input, element);
+            input.focus();
+
+            const save = () => {
+                onSave(input.value);
+            };
+
+            input.addEventListener('blur', save);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    renderAll();
+                }
+            });
+        }
+        
+        function toggleArchiveSection(isOpen) {
+            state.settings.archiveOpen = isOpen;
+            if (isOpen) {
+                archivedGoalsList.classList.remove('hidden');
+                toggleArchiveBtn.querySelector('i').classList.add('rotate-180');
+            } else {
+                archivedGoalsList.classList.add('hidden');
+                toggleArchiveBtn.querySelector('i').classList.remove('rotate-180');
+            }
+            saveState();
+        }
+
+        function showStatsModal() {
+             const sevenDaysAgo = new Date();
+             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+             const today = new Date();
+
+             const relevantTasks = state.tasks.filter(t => {
+                if (!t.done || !t.date) return false;
+                const taskDate = new Date(t.date);
+                return taskDate >= sevenDaysAgo && taskDate <= today;
+             });
+
+             const tasksCompleted = relevantTasks.length;
+             const timeFocused = relevantTasks.reduce((acc, t) => acc + t.setTime, 0);
+             
+             let dailyData = {};
+             for (let i = 0; i < 7; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                dailyData[d.toISOString().split('T')[0]] = 0;
+             }
+             
+             relevantTasks.forEach(t => {
+                if(dailyData[t.date] !== undefined) {
+                    dailyData[t.date]++;
+                }
+             });
+
+             const maxTasks = Math.max(...Object.values(dailyData), 1);
+
+             statsContent.innerHTML = `
+                <div class="col-span-2 grid grid-cols-2 gap-4">
+                    <div class="bg-slate-100 dark:bg-slate-700/50 p-4 rounded-lg">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Tasks Completed</p>
+                        <p class="text-3xl font-bold">${tasksCompleted}</p>
+                    </div>
+                     <div class="bg-slate-100 dark:bg-slate-700/50 p-4 rounded-lg">
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Time Focused</p>
+                        <p class="text-3xl font-bold">${formatTimeShort(timeFocused)}</p>
+                    </div>
+                </div>
+                <div class="col-span-2 mt-4">
+                     <p class="text-sm text-left font-bold mb-2">Daily Completion</p>
+                     <div class="flex justify-between items-end h-32 bg-slate-100 dark:bg-slate-700/50 p-2 rounded-lg gap-1">
+                        ${Object.entries(dailyData).reverse().map(([date, count]) => `
+                            <div class="flex flex-col items-center flex-1">
+                                <div class="w-full bg-sky-500 rounded-t-sm" style="height: ${(count/maxTasks) * 100}%" title="${count} tasks"></div>
+                                <p class="text-xs text-slate-400 mt-1">${new Date(date).getDate()}</p>
+                            </div>
+                        `).join('')}
+                     </div>
+                </div>
+             `;
+
+
+            modalOverlay.classList.remove('hidden');
+            statsModal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.add('hidden');
+            deleteModal.classList.add('hidden');
+            statsModal.classList.add('hidden');
+            deleteCallback = null;
+        }
+
+        // --- Drag and Drop Handlers ---
+        let draggedItem = null;
+
+        function handleDragStart(e) {
+            draggedItem = e.target.closest('.task-draggable, .goal-card');
+            if (!draggedItem) { e.preventDefault(); return; }
+
+            e.dataTransfer.effectAllowed = 'move';
+            if (draggedItem.classList.contains('task-draggable')) {
+                e.dataTransfer.setData('text/momentum-task-id', draggedItem.dataset.taskId);
+            } else if (draggedItem.classList.contains('goal-card')) {
+                e.dataTransfer.setData('text/momentum-goal-id', draggedItem.dataset.goalId);
+            }
+            
+            setTimeout(() => { draggedItem.classList.add('ghost'); }, 0);
+        }
+
+        function handleDragEnd() {
+            if (draggedItem) {
+                draggedItem.classList.remove('ghost');
+                draggedItem = null;
+            }
+            document.querySelectorAll('.drop-zone-active').forEach(el => el.classList.remove('drop-zone-active'));
+        }
+
+        function handleDragOver(e) { e.preventDefault(); }
+
+        function handleDragEnter(e, element) {
+            e.preventDefault();
+            const isTaskDrag = e.dataTransfer.types.includes('text/momentum-task-id'.toLowerCase());
+            const isGoalDrag = e.dataTransfer.types.includes('text/momentum-goal-id'.toLowerCase());
+            
+            if (element.id === 'today-view' && isTaskDrag && draggedItem?.dataset.goalId) {
+                element.classList.add('drop-zone-active');
+            } else if (element.classList.contains('goal-card')) {
+                if (isTaskDrag && draggedItem?.dataset.goalId === element.dataset.goalId) {
+                    element.classList.add('drop-zone-active');
+                } else if (isGoalDrag && draggedItem !== element) {
+                    element.classList.add('drop-zone-active');
+                }
+            }
+        }
+
+        function handleDragLeave(e, element) {
+            element.classList.remove('drop-zone-active');
+        }
+
+        function handleDropOnToday(e) {
+            e.preventDefault();
+            todayView.classList.remove('drop-zone-active');
+            const taskId = e.dataTransfer.getData('text/momentum-task-id');
+            if (taskId) {
+                const task = state.tasks.find(t => t.id === taskId);
+                if (task && task.status === 'inGoal') {
+                    playSound('swoosh');
+                    task.status = 'inDaily';
+                    task.date = new Date().toISOString().split('T')[0];
+                    if (task.setTime === 0) task.setTime = 1800;
+                    if (task.timeRemaining === 0 && task.setTime > 0) task.timeRemaining = task.setTime;
+                    saveState();
+                    renderAll();
+                }
+            }
+        }
+
+        function handleDropOnGoal(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const dropTargetGoalCard = e.currentTarget;
+            dropTargetGoalCard.classList.remove('drop-zone-active');
+
+            const taskId = e.dataTransfer.getData('text/momentum-task-id');
+            if (taskId) {
+                const task = state.tasks.find(t => t.id === taskId);
+                if (task && task.status === 'inDaily' && task.goalId === dropTargetGoalCard.dataset.goalId) {
+                    playSound('swoosh');
+                    task.status = 'inGoal';
+                    task.date = null;
+                    task.isRunning = false;
+                    saveState();
+                    renderAll();
+                }
+                return;
+            }
+
+            const draggedGoalId = e.dataTransfer.getData('text/momentum-goal-id');
+            if (draggedGoalId && draggedGoalId !== dropTargetGoalCard.dataset.goalId) {
+                const targetGoalId = dropTargetGoalCard.dataset.goalId;
+
+                const draggedIndex = state.goals.findIndex(g => g.id === draggedGoalId);
+                const targetIndex = state.goals.findIndex(g => g.id === targetGoalId);
+
+                if (draggedIndex > -1 && targetIndex > -1) {
+                    const [draggedGoal] = state.goals.splice(draggedIndex, 1);
+                    state.goals.splice(targetIndex, 0, draggedGoal);
+                    saveState();
+                    renderAll();
+                }
+            }
+        }
+
+        // --- Global Event Listeners ---
+        function attachEventListeners() {
+            addGoalForm.onsubmit = e => {
+                e.preventDefault();
+                addGoal(newGoalInput.value);
+                newGoalInput.value = '';
+            };
+            
+            addTaskForm.onsubmit = e => {
+                e.preventDefault();
+                const hours = parseInt(newTaskHours.value, 10) || 0;
+                const minutes = parseInt(newTaskMinutes.value, 10) || 0;
+                const totalSeconds = (hours * 3600) + (minutes * 60);
+                addQuickTask(newTaskInput.value, totalSeconds);
+                newTaskInput.value = '';
+                newTaskHours.value = '';
+                newTaskMinutes.value = '';
+            };
+
+            todayView.addEventListener('dragover', handleDragOver);
+            todayView.addEventListener('dragenter', (e) => handleDragEnter(e, todayView));
+            todayView.addEventListener('dragleave', (e) => handleDragLeave(e, todayView));
+            todayView.addEventListener('drop', handleDropOnToday);
+            
+            document.body.addEventListener('dragend', handleDragEnd);
+
+            themeToggleButton.onclick = toggleTheme;
+            soundToggleButton.onclick = toggleSound;
+            statsButton.onclick = showStatsModal;
+            closeStatsBtn.onclick = closeModal;
+            cancelDeleteBtn.onclick = closeModal;
+            confirmDeleteBtn.onclick = () => {
+                if(deleteCallback) deleteCallback();
+            };
+            toggleArchiveBtn.onclick = () => toggleArchiveSection(!state.settings.archiveOpen);
+        }
+
+        // --- App Entry Point ---
+        main();
+
+    </script>
+</body>
+</html>
