@@ -64,14 +64,6 @@
             opacity: 0.5;
             background: #c0deed;
         }
-
-        /* Bolt Badge Styles */
-        .bolt-badge {
-            transition: all 0.3s ease;
-        }
-        .bolt-badge:hover {
-            transform: scale(1.05);
-        }
     </style>
 </head>
 <body class="transition-colors duration-300 bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-200">
@@ -165,16 +157,6 @@
         </main>
     </div>
 
-    <!-- Built with Bolt.new Badge -->
-    <div class="fixed bottom-4 right-4 z-40">
-        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer" class="bolt-badge inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium px-3 py-2 rounded-full shadow-lg hover:shadow-xl">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M13 0L0 13h7v11l13-13h-7V0z"/>
-            </svg>
-            <span>Built with Bolt.new</span>
-        </a>
-    </div>
-
     <!-- Celebration Overlay -->
     <div id="celebration-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 pointer-events-none">
         <div class="text-center text-white">
@@ -202,6 +184,17 @@
              </div>
              <div id="stats-content" class="grid grid-cols-2 gap-4 text-left"></div>
         </div>
+    </div>
+
+    <!-- Built with Bolt.new Badge -->
+    <div class="fixed bottom-4 right-4 z-40">
+        <a href="https://bolt.new" target="_blank" rel="noopener noreferrer" 
+           class="inline-flex items-center gap-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-2 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-all duration-200 text-sm font-medium hover:scale-105">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="text-orange-500">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>
+            </svg>
+            Built with Bolt.new
+        </a>
     </div>
     
     <script type="module">
@@ -292,6 +285,7 @@
         }
 
         // --- Data Persistence & Theme ---
+
         function loadState() {
             const savedState = localStorage.getItem(LOCAL_STORAGE_KEY);
             if (savedState) {
@@ -302,13 +296,31 @@
                 if (!state.settings) state.settings = { theme: 'light', sounds: true, archiveOpen: false };
                 if (state.settings.sounds === undefined) state.settings.sounds = true;
                 if (state.settings.archiveOpen === undefined) state.settings.archiveOpen = false;
+                
+                // Restore timer states with timestamp-based calculation
+                const now = Date.now();
                 state.tasks.forEach(task => {
                     if (task.setTime === undefined) task.setTime = 0;
                     if (task.timeRemaining === undefined) task.timeRemaining = 0;
                     if (task.isRunning === undefined) task.isRunning = false;
                     if (task.done) task.isRunning = false;
                     if (task.status === undefined) task.status = task.date ? 'inDaily' : 'inGoal';
+                    
+                    // Handle background timer calculation
+                    if (task.isRunning && task.lastUpdateTime) {
+                        const elapsedSeconds = Math.floor((now - task.lastUpdateTime) / 1000);
+                        task.timeRemaining = Math.max(0, task.timeRemaining - elapsedSeconds);
+                        if (task.timeRemaining === 0) {
+                            task.isRunning = false;
+                        }
+                    }
+                    
+                    // Initialize lastUpdateTime if not present
+                    if (!task.lastUpdateTime) {
+                        task.lastUpdateTime = now;
+                    }
                 });
+                
                 state.goals.forEach(goal => {
                     if (goal.isArchived === undefined) goal.isArchived = false;
                 });
@@ -318,6 +330,13 @@
         }
 
         function saveState() {
+            // Update timestamps for running timers before saving
+            const now = Date.now();
+            state.tasks.forEach(task => {
+                if (task.isRunning) {
+                    task.lastUpdateTime = now;
+                }
+            });
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
         }
 
@@ -373,6 +392,7 @@
         }
 
         function startMasterTimers() {
+            // Daily countdown timer
             setInterval(() => {
                 const now = new Date();
                 const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
@@ -380,20 +400,32 @@
                 dailyTimeRemainingEl.textContent = formatTime(dailyTimeRemaining);
             }, 1000);
 
+            // Task timer system - uses timestamp-based calculation for accuracy
             timerInterval = setInterval(() => {
                 let changed = false;
+                const now = Date.now();
+                
                 state.tasks.forEach(task => {
                     if (task.isRunning && task.timeRemaining > 0 && task.status === 'inDaily') {
-                        task.timeRemaining--;
-                        if (task.timeRemaining === 0) {
-                            playSound('timerDone', 'C5');
+                        // Calculate elapsed time since last update
+                        const elapsedSeconds = Math.floor((now - (task.lastUpdateTime || now)) / 1000);
+                        
+                        if (elapsedSeconds >= 1) {
+                            task.timeRemaining = Math.max(0, task.timeRemaining - elapsedSeconds);
+                            task.lastUpdateTime = now;
+                            changed = true;
+                            
+                            if (task.timeRemaining === 0) {
+                                playSound('timerDone', 'C5');
+                                task.isRunning = false;
+                            }
                         }
-                        changed = true;
                     } else if (task.isRunning && task.timeRemaining <= 0) {
                         task.isRunning = false;
                         changed = true;
                     }
                 });
+                
                 if (changed) {
                     saveState();
                     renderDailyTasks();
@@ -525,7 +557,6 @@
                 <div draggable="true" class="mini-task task-draggable bg-slate-50 dark:bg-slate-800 p-2 rounded-md text-sm flex items-center border border-slate-200 dark:border-slate-700 group" data-task-id="${task.id}" data-goal-id="${task.goalId}" data-text="${task.text}">
                     <input type="checkbox" ${task.done ? 'checked' : ''} class="mini-task-checkbox h-4 w-4 rounded border-gray-300 text-sky-600 focus:ring-sky-500 mr-3 shrink-0">
                     <span class="task-text-span flex-grow cursor-pointer ${task.done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}">${task.text}</span>
-                    
                     <div class="flex items-center">
                         <button class="delete-mini-task-btn text-slate-300 dark:text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete this task">
                             <i class="fa-solid fa-xmark"></i>
@@ -581,7 +612,6 @@
             const progressPercentage = task.setTime > 0 ? ((task.setTime - task.timeRemaining) / task.setTime) * 100 : 0;
             const isTimeUp = task.setTime > 0 && task.timeRemaining <= 0;
             const starColorClass = task.isStarred && !task.done ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600';
-
 
             el.innerHTML = `
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -667,7 +697,8 @@
             const newTask = {
                 id: crypto.randomUUID(), text: text.trim(), done: false, isStarred: false, isRunning: false,
                 setTime: 0, timeRemaining: 0, goalId: goalId, status: 'inGoal',
-                date: null, isRollover: false, createdAt: new Date().toISOString()
+                date: null, isRollover: false, createdAt: new Date().toISOString(),
+                lastUpdateTime: Date.now()
             };
             state.tasks.push(newTask);
             saveState();
@@ -679,7 +710,8 @@
             state.tasks.push({
                 id: crypto.randomUUID(), text: text.trim(), done: false, isStarred: false, isRunning: false,
                 setTime: setTime, timeRemaining: setTime, goalId: null, status: 'inDaily',
-                date: new Date().toISOString().split('T')[0], isRollover: false, createdAt: new Date().toISOString()
+                date: new Date().toISOString().split('T')[0], isRollover: false, createdAt: new Date().toISOString(),
+                lastUpdateTime: Date.now()
             });
             saveState();
             renderAll();
@@ -728,6 +760,7 @@
             const task = state.tasks.find(t => t.id === taskId);
             if (task && !task.done && task.timeRemaining > 0) {
                 task.isRunning = !task.isRunning;
+                task.lastUpdateTime = Date.now(); // Update timestamp when toggling
                 saveState();
                 renderDailyTasks();
             }
@@ -738,6 +771,7 @@
             if (task) {
                 task.timeRemaining = task.setTime;
                 task.isRunning = false;
+                task.lastUpdateTime = Date.now();
                 saveState();
                 renderDailyTasks();
             }
@@ -766,6 +800,7 @@
                 task.setTime = newTotalSeconds;
                 task.timeRemaining = newTotalSeconds; // Reset timer to new value
                 task.isRunning = false;
+                task.lastUpdateTime = Date.now();
                 
                 saveState();
                 renderAll();
@@ -826,6 +861,7 @@
                     task.isStarred = false;
                     task.isRunning = false;
                     task.timeRemaining = task.setTime;
+                    task.lastUpdateTime = Date.now();
                 }
             });
             state.tasks = state.tasks.filter(task => {
@@ -1047,6 +1083,7 @@
                     task.date = new Date().toISOString().split('T')[0];
                     if (task.setTime === 0) task.setTime = 1800;
                     if (task.timeRemaining === 0 && task.setTime > 0) task.timeRemaining = task.setTime;
+                    task.lastUpdateTime = Date.now();
                     saveState();
                     renderAll();
                 }
@@ -1067,6 +1104,7 @@
                     task.status = 'inGoal';
                     task.date = null;
                     task.isRunning = false;
+                    task.lastUpdateTime = Date.now();
                     saveState();
                     renderAll();
                 }
